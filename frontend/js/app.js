@@ -94,9 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const maxSizeBytes = 100 * 1024 * 1024; // 100MB
+        const maxSizeBytes = 5 * 1024 * 1024; // 5MB
         if (file.size > maxSizeBytes) {
-            alert('O arquivo selecionado é muito grande. O limite máximo é 100MB.');
+            alert('O arquivo selecionado é muito grande. O limite máximo é 5MB para garantir uma tradução rápida.');
             return;
         }
 

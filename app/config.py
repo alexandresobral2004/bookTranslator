@@ -17,13 +17,17 @@ class Settings(BaseSettings):
     GLOSSARY_DIR: str = Field(default="./data/glossary")
 
     # Configurações de Upload
-    MAX_FILE_MB: int = Field(default=100)
+    MAX_FILE_MB: int = Field(default=5)
 
     # Configurações do MarianMT
     MARIAN_MODEL_NAME: str = Field(default="Helsinki-NLP/opus-mt-tc-big-en-pt")
     CHUNK_SIZE_TOKENS: int = Field(default=400)
-    BATCH_SIZE: int = Field(default=8)
-    TRANSLATION_WORKERS: int = Field(default=2)
+    BATCH_SIZE: int = Field(default=16)
+    TRANSLATION_WORKERS: int = Field(default=3)
+    # Número de beams para decodificação: 1 = greedy (mais rápido), 4 = beam search (melhor qualidade)
+    TRANSLATION_NUM_BEAMS: int = Field(default=1)
+    # Threads PyTorch para inferência CPU (0 = automático, usa todos os cores)
+    TORCH_NUM_THREADS: int = Field(default=0)
 
     # Configurações de RAG / Glossário
     GLOSSARY_FILE_NAME: str = Field(default="glossary.csv")

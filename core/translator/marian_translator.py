@@ -57,6 +57,15 @@ class MarianTranslator:
                     cache_dir=self.cache_dir
                 ).to(self.device)
                 
+                # Configura o número de threads PyTorch para CPU
+                # 0 = automático (PyTorch detecta o número de cores físicos)
+                num_threads = settings.TORCH_NUM_THREADS
+                if num_threads > 0:
+                    torch.set_num_threads(num_threads)
+                    logger.info(f"PyTorch configurado para usar {num_threads} thread(s) de inferência.")
+                else:
+                    logger.info(f"PyTorch usando threads automáticos: {torch.get_num_threads()} thread(s).")
+                
                 logger.info("Modelo de tradução local carregado com sucesso.")
             except Exception as e:
                 logger.error(f"Falha crítica ao carregar o modelo MarianMT: {str(e)}", exc_info=True)
@@ -83,10 +92,17 @@ class MarianTranslator:
                 max_length=512
             ).to(self.device)
             
-            # Geração da tradução sem cálculo de gradientes com trava de segurança de thread
+            # Geração da tradução com trava de segurança de thread.
+            # torch.inference_mode() é mais rápido que torch.no_grad():
+            # desabilita cálculo de gradientes E rastreamento de versões de tensores.
             with self._lock:
-                with torch.no_grad():
-                    translated_tokens = self.model.generate(**inputs)
+                with torch.inference_mode():
+                    translated_tokens = self.model.generate(
+                        **inputs,
+                        num_beams=settings.TRANSLATION_NUM_BEAMS,
+                        # early_stopping só tem efeito com num_beams > 1
+                        early_stopping=settings.TRANSLATION_NUM_BEAMS > 1,
+                    )
                 
             # Decodificação das saídas de tokens para strings legíveis
             decoded_translations = self.tokenizer.batch_decode(
