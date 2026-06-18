@@ -29,14 +29,13 @@ async def download_translated_pdf(job_id: str):
         )
 
     file_path = os.path.join(settings.OUTPUT_DIR, job.output_filename)
-    
-    # Criamos um arquivo de simulação caso ele ainda não exista no disco (para podermos testar a API pura sem o backend de WeasyPrint pronto)
+
     if not os.path.exists(file_path):
-        # Para testes do mock, se o arquivo físico ainda não existir, cria um dummy de 0 bytes
-        os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
-        with open(file_path, "wb") as f:
-            f.write(b"%PDF-1.4 Mock output PDF contents for testing backend structures.")
-        logger.info(f"Criado arquivo dummy para download em {file_path}")
+        logger.error(f"Arquivo de saída não encontrado no disco: {file_path}")
+        raise HTTPException(
+            status_code=404,
+            detail="O arquivo traduzido não foi encontrado no disco. O pipeline pode ter falhado durante a compilação do PDF."
+        )
 
     # Define o nome do arquivo final de download como o nome original com sufixo _traduzido
     base_name, _ = os.path.splitext(job.filename)

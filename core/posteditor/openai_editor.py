@@ -41,35 +41,21 @@ class OpenAIEditor:
             f"Tradução a ser revisada (PT):\n{current_pt}"
         )
 
-        def call_openai():
+        # Executa a chamada bloqueante da OpenAI em thread separada para não bloquear o event loop
+        def call_openai_safe():
             client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_instruction},
-                    {"role": "role", "content": user_content}  # Corrigido: role deve ser 'user'
+                    {"role": "user", "content": user_content}
                 ],
                 temperature=0.1,
                 max_tokens=1000
             )
             return response.choices[0].message.content.strip()
 
-        # Executa a chamada bloqueante em thread separada
         try:
-            # Corrigindo a role do dicionário
-            def call_openai_safe():
-                client = OpenAI(api_key=api_key)
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": user_content}
-                    ],
-                    temperature=0.1,
-                    max_tokens=1000
-                )
-                return response.choices[0].message.content.strip()
-                
             revised_text = await asyncio.to_thread(call_openai_safe)
             logger.info("Pós-edição OpenAI executada com sucesso para um bloco.")
             return revised_text

@@ -56,8 +56,10 @@ class HTMLBuilder:
                 if block.block_type != "text":
                     continue
                 
-                # Busca a tradução do bloco (pode ser reconstruída de múltiplos chunks)
-                key = f"{page.page_num}_{page.blocks.index(block)}"
+                # Calcula o índice real do bloco na lista ORIGINAL (antes do sorting)
+                # para garantir que a chave bata com o mapa de traduções
+                original_idx = page.blocks.index(block)
+                key = f"{page.page_num}_{original_idx}"
                 translated_texts_list = translations_map.get(key)
                 
                 if translated_texts_list:
@@ -98,18 +100,18 @@ class HTMLBuilder:
     <meta charset="UTF-8">
     <title>Livro Traduzido</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap');
+        /* Fontes via fallback seguro — WeasyPrint roda server-side sem acesso a Google Fonts */
         
         body {{
-            font-family: 'Crimson Pro', Georgia, serif;
+            font-family: Georgia, 'Times New Roman', serif;
             color: #2c3e50;
             margin: 0;
             padding: 0;
-            background-color: #f8f9fa;
+            background-color: #ffffff;
         }}
         
         h1, h2, h3 {{
-            font-family: 'Inter', sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             color: #1a252f;
             margin-top: 24px;
             margin-bottom: 12px;

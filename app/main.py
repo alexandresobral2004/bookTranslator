@@ -1,4 +1,5 @@
 import os
+import sys
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -10,11 +11,11 @@ from app.config import settings
 from app.routers import upload, jobs, download
 from core.jobs.job_store import job_store
 
-# Configuração de Logs
+# Configuração de Logs (redirecionados para stdout para evitar [err] em logs informativos no Railway)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("app.main")
 

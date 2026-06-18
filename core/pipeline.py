@@ -189,6 +189,13 @@ async def start_translation_pipeline(job_id: str, file_path: str, options: Trans
         )
         logger.info(f"Job {job_id} concluído com sucesso. Arquivo: {output_filename}")
 
+        # Limpa o arquivo de upload temporário após a conclusão bem-sucedida
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
     except Exception as e:
         logger.error(f"Erro crítico no pipeline do job {job_id}: {str(e)}", exc_info=True)
         job_store.update_job(
