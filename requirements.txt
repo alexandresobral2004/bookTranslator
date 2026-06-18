@@ -1,0 +1,31 @@
+# fastapi & server
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+pydantic-settings>=2.3.0
+aiofiles>=23.2.0
+
+# pdf extraction
+pymupdf>=1.24.0
+
+# translation & models
+transformers>=4.41.0
+torch>=2.3.0
+sentencepiece>=0.2.0
+sacremoses>=0.1.1
+
+# RAG & vector database
+faiss-cpu>=1.8.0
+sentence-transformers>=3.0.0
+
+# openai client
+openai>=1.35.0
+
+# pdf compilation
+weasyprint>=62.0
+
+# dev & testing
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+ruff>=0.4.0
