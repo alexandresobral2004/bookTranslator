@@ -1,4 +1,6 @@
 import os
+import re
+import threading
 import torch
 import logging
 from typing import List
@@ -14,6 +16,7 @@ class MarianTranslator:
         self.model = None
         self.tokenizer = None
         self.device = "cpu"
+        self._lock = threading.Lock()
 
     def load_model(self) -> None:
         """Carrega o modelo MarianMT e Tokenizer em memória (Lazy loading)."""
@@ -74,9 +77,10 @@ class MarianTranslator:
                 max_length=512
             ).to(self.device)
             
-            # Geração da tradução sem cálculo de gradientes
-            with torch.no_grad():
-                translated_tokens = self.model.generate(**inputs)
+            # Geração da tradução sem cálculo de gradientes com trava de segurança de thread
+            with self._lock:
+                with torch.no_grad():
+                    translated_tokens = self.model.generate(**inputs)
                 
             # Decodificação das saídas de tokens para strings legíveis
             decoded_translations = self.tokenizer.batch_decode(
@@ -97,9 +101,6 @@ class MarianTranslator:
         except Exception as e:
             logger.error(f"Erro durante a tradução local: {str(e)}")
             raise e
-
-# Regex import helper necessário para sanitização
-import re
 
 # Singleton do tradutor
 translator = MarianTranslator()

@@ -2,12 +2,9 @@ import asyncio
 import logging
 from typing import List, Callable, Awaitable, Any, Optional
 from app.config import settings
-from core.translator.marian_translator import MarianTranslator
+from core.translator.marian_translator import translator
 
 logger = logging.getLogger(__name__)
-
-# Instância singleton do tradutor
-translator = MarianTranslator()
 
 async def translate_chunks_batched(
     chunks: List[str], 
@@ -15,7 +12,8 @@ async def translate_chunks_batched(
 ) -> List[str]:
     """
     Traduz uma lista de textos em lotes (batches) de forma assíncrona, 
-    utilizando asyncio.to_thread para não travar o event loop do FastAPI.
+    utilizando asyncio.to_thread e limitando com um asyncio.Semaphore
+    para paralelizar as traduções sem causar sobrecarga de memória/processamento.
     
     A cada lote processado, opcionalmente chama a função progress_callback(processed_count, total_count).
     """
@@ -24,38 +22,70 @@ async def translate_chunks_batched(
 
     batch_size = settings.BATCH_SIZE
     total_count = len(chunks)
-    translated_texts = []
     
-    logger.info(f"Iniciando tradução de {total_count} chunks em lotes de tamanho {batch_size}.")
+    # Criamos o semáforo de concorrência com o número configurado de workers
+    workers = settings.TRANSLATION_WORKERS
+    sem = asyncio.Semaphore(workers)
     
-    # Executa em lotes
-    for i in range(0, total_count, batch_size):
-        batch = chunks[i:i + batch_size]
+    logger.info(
+        f"Iniciando tradução de {total_count} chunks em lotes de tamanho {batch_size} "
+        f"com {workers} workers paralelos."
+    )
+    
+    # Controladores de progresso seguros
+    processed_count = 0
+    progress_lock = asyncio.Lock()
+    
+    async def update_progress(count: int):
+        nonlocal processed_count
+        async with progress_lock:
+            processed_count += count
+            if progress_callback:
+                try:
+                    await progress_callback(processed_count, total_count)
+                except Exception as cb_err:
+                    logger.warning(f"Erro ao chamar callback de progresso: {str(cb_err)}")
+
+    async def translate_batch(batch_idx: int, batch: List[str]) -> List[str]:
+        # Tenta traduzir o lote inteiro utilizando o semáforo
+        async with sem:
+            try:
+                # Roda a inferência do modelo em uma thread separada para não bloquear a API
+                batch_translated = await asyncio.to_thread(translator.translate, batch)
+                await update_progress(len(batch))
+                return batch_translated
+            except Exception as e:
+                logger.error(f"Erro ao traduzir lote {batch_idx + 1}: {str(e)}")
+                logger.info("Tentando traduzir itens do lote individualmente como fallback...")
         
-        try:
-            # Roda a inferência do modelo em uma thread separada para não bloquear a API
-            batch_translated = await asyncio.to_thread(translator.translate, batch)
-            translated_texts.extend(batch_translated)
-        except Exception as e:
-            logger.error(f"Erro ao traduzir lote {i // batch_size + 1}: {str(e)}")
-            # Fallback em caso de falha do lote: tenta individualmente para não perder todo o lote
-            logger.info("Tentando traduzir itens do lote individualmente como fallback...")
-            for text in batch:
+        # Fallback em caso de falha do lote: tenta individualmente para não perder todo o lote.
+        # Note que liberamos o semáforo do lote principal e cada tentativa individual adquirirá o semáforo.
+        batch_translated = []
+        for text in batch:
+            async with sem:
                 try:
                     single_translated = await asyncio.to_thread(translator.translate, [text])
-                    translated_texts.extend(single_translated)
+                    batch_translated.extend(single_translated)
                 except Exception as single_err:
                     logger.error(f"Falha de tradução individual: {str(single_err)}")
                     # Se falhar totalmente, mantém o texto original para não parar o pipeline
-                    translated_texts.append(text)
-                    
-        # Aciona o callback de progresso se fornecido
-        processed = min(i + batch_size, total_count)
-        if progress_callback:
-            try:
-                await progress_callback(processed, total_count)
-            except Exception as cb_err:
-                logger.warning(f"Erro ao chamar callback de progresso: {str(cb_err)}")
+                    batch_translated.append(text)
+            # Atualiza o progresso para cada chunk processado
+            await update_progress(1)
+            
+        return batch_translated
 
-    return translated_texts
+    # Divide a lista em batches e cria as tarefas concorrentes
+    batches = [chunks[i:i + batch_size] for i in range(0, total_count, batch_size)]
+    tasks = [translate_batch(idx, batch) for idx, batch in enumerate(batches)]
+    
+    # Executa de forma concorrente. A ordem dos resultados é preservada pelo asyncio.gather
+    results = await asyncio.gather(*tasks)
+    
+    # Achatando a lista de listas em uma única lista ordenada de resultados
+    flat_results = []
+    for res in results:
+        flat_results.extend(res)
+        
+    return flat_results
 

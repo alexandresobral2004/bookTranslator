@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     MARIAN_MODEL_NAME: str = Field(default="Helsinki-NLP/opus-mt-tc-big-en-pt")
     CHUNK_SIZE_TOKENS: int = Field(default=400)
     BATCH_SIZE: int = Field(default=8)
+    TRANSLATION_WORKERS: int = Field(default=2)
 
     # Configurações de RAG / Glossário
     GLOSSARY_FILE_NAME: str = Field(default="glossary.csv")
