@@ -50,8 +50,10 @@ async def start_translation_pipeline(job_id: str, file_path: str, options: Trans
         if not chunks:
             raise ValueError("Não foi possível segmentar o documento em chunks válidos.")
 
-        # 3. Camada RAG & Glossário (Fase 3 - a ser implementada)
-        # Placeholder para as próximas fases:
+        # 3. Camada RAG & Glossário
+        # Estrutura para armazenar os mapeamentos de placeholders por chunk
+        placeholders_mappings = [None] * len(chunks)
+        
         if options.use_glossary:
             job_store.update_job(
                 job_id, 
@@ -59,8 +61,15 @@ async def start_translation_pipeline(job_id: str, file_path: str, options: Trans
                 progress=20.0, 
                 message="Carregando dicionário e aplicando termos do glossário..."
             )
-            # RAG HOOK: Aqui aplicaremos a substituição de termos
-            await asyncio.sleep(1.0) # Simulação de carregamento do index
+            from core.rag.term_replacer import term_replacer
+            
+            def preprocess_all_chunks():
+                for idx, chunk_item in enumerate(chunks):
+                    processed_text, mapping = term_replacer.preprocess_chunk(chunk_item["text"])
+                    chunk_item["text"] = processed_text
+                    placeholders_mappings[idx] = mapping
+                    
+            await asyncio.to_thread(preprocess_all_chunks)
             
         # 4. Tradução via MarianMT
         job_store.update_job(
@@ -89,20 +98,57 @@ async def start_translation_pipeline(job_id: str, file_path: str, options: Trans
             progress_callback=translation_progress
         )
         
+        # Pós-processamento do glossário: Restaura os termos corretos em português
+        if options.use_glossary:
+            from core.rag.term_replacer import term_replacer
+            
+            def postprocess_all_chunks():
+                for idx, trans_text in enumerate(translated_texts):
+                    mapping = placeholders_mappings[idx]
+                    if mapping:
+                        translated_texts[idx] = term_replacer.postprocess_chunk(trans_text, mapping)
+                        
+            await asyncio.to_thread(postprocess_all_chunks)
+            
         # Vincula os textos traduzidos de volta nos respectivos chunks
         for idx, trans_text in enumerate(translated_texts):
             chunks[idx]["translated_text"] = trans_text
 
-        # 5. Pós-edição OpenAI (Fase 4 - a ser implementada)
+        # 5. Pós-edição OpenAI
         if options.use_openai_postedit:
             job_store.update_job(
                 job_id, 
                 status=JobStatus.POSTEDITING, 
-                progress=85.0, 
-                message="Avaliando e revisando trechos com OpenAI..."
+                progress=82.0, 
+                message="Avaliando a qualidade da tradução local..."
             )
-            # POST-EDIT HOOK: Aqui executaremos a verificação de qualidade
-            await asyncio.sleep(1.0)
+            from core.translator.quality_scorer import quality_scorer
+            from core.posteditor.openai_editor import openai_editor
+            
+            low_quality_count = 0
+            for idx, chunk_item in enumerate(chunks):
+                original_en = chunk_item["text"]
+                translated_pt = chunk_item["translated_text"]
+                
+                # Calcula o score de qualidade do chunk
+                score = quality_scorer.evaluate_quality(original_en, translated_pt)
+                
+                # Se estiver abaixo do threshold, corrige com OpenAI
+                if score < settings.QUALITY_THRESHOLD:
+                    low_quality_count += 1
+                    job_store.update_job(
+                        job_id,
+                        progress=82.0 + (idx / len(chunks)) * 7.0,
+                        message=f"Corrigindo trecho {low_quality_count} com OpenAI..."
+                    )
+                    corrected_text = await openai_editor.postedit_translation_async(
+                        original_en=original_en,
+                        current_pt=translated_pt,
+                        user_api_key=options.openai_api_key
+                    )
+                    chunk_item["translated_text"] = corrected_text
+                    
+            logger.info(f"Pós-edição OpenAI concluída. {low_quality_count}/{len(chunks)} chunks corrigidos.")
 
         # 6. Reconstrução do layout (HTML + PDF final)
         job_store.update_job(

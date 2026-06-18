@@ -1,0 +1,20 @@
+term_en,term_pt,domain
+neural network,rede neural,machine_learning
+backpropagation,retropropagação,machine_learning
+loss function,função de perda,machine_learning
+supervised learning,aprendizado supervisionado,machine_learning
+convolutional,convolucional,deep_learning
+transformer,transformador,nlp
+tokenizer,tokenizador,nlp
+embedding,embedding,nlp
+fine-tuning,ajuste fino,nlp
+learning rate,taxa de aprendizado,machine_learning
+overfitting,sobreajuste,machine_learning
+underfitting,subajuste,machine_learning
+data set,conjunto de dados,data_science
+dataset,conjunto de dados,data_science
+gradient descent,gradiente descendente,machine_learning
+reinforcement learning,aprendizado por reforço,machine_learning
+computer vision,visão computacional,artificial_intelligence
+natural language processing,processamento de linguagem natural,nlp
+deep learning,aprendizado profundo,machine_learning

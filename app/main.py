@@ -36,6 +36,13 @@ async def lifespan(app: FastAPI):
     # Garante que os diretórios necessários existam
     settings.create_directories()
     
+    # Inicializa o glossário FAISS se disponível
+    try:
+        from core.rag.glossary_loader import initialize_glossary
+        initialize_glossary()
+    except Exception as e:
+        logger.error(f"Erro ao inicializar glossário no startup: {str(e)}")
+        
     # Cria a pasta frontend se não existir para evitar erro de montagem do StaticFiles
     os.makedirs("frontend", exist_ok=True)
     os.makedirs(os.path.join("frontend", "css"), exist_ok=True)
