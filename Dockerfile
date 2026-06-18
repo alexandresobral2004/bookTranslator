@@ -51,9 +51,11 @@ RUN mkdir -p data/models data/uploads data/outputs data/glossary frontend
 COPY app/ ./app/
 COPY core/ ./core/
 COPY frontend/ ./frontend/
+COPY start.py .
 COPY requirements.txt .
 
 EXPOSE 8000
 
-# Executa o servidor FastAPI com Uvicorn (porta dinâmica para Railway/Render)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Usa start.py para iniciar o Uvicorn programaticamente com log_config
+# que redireciona TODOS os logs (incluindo internos do Uvicorn) para stdout
+CMD ["python", "start.py"]
