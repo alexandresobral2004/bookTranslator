@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import List, Callable, Awaitable, Any
+from typing import List, Callable, Awaitable, Any, Optional
 from app.config import settings
 from core.translator.marian_translator import MarianTranslator
 
@@ -59,5 +59,3 @@ async def translate_chunks_batched(
 
     return translated_texts
 
-# Import extra para tipo opcional
-from typing import Optional
