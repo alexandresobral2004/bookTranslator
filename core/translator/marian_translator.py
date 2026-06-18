@@ -100,3 +100,6 @@ class MarianTranslator:
 
 # Regex import helper necessário para sanitização
 import re
+
+# Singleton do tradutor
+translator = MarianTranslator()
