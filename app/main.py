@@ -44,6 +44,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Erro ao inicializar glossário no startup: {str(e)}")
         
+    # Pré-carrega o modelo de tradução local para evitar race conditions em threads
+    try:
+        from core.translator.marian_translator import translator
+        logger.info("Pré-carregando modelo de tradução no startup...")
+        await asyncio.to_thread(translator.load_model)
+    except Exception as e:
+        logger.error(f"Erro ao pré-carregar modelo de tradução no startup: {str(e)}")
+        
     # Cria a pasta frontend se não existir para evitar erro de montagem do StaticFiles
     os.makedirs("frontend", exist_ok=True)
     os.makedirs(os.path.join("frontend", "css"), exist_ok=True)

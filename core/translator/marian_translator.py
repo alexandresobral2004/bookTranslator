@@ -17,44 +17,50 @@ class MarianTranslator:
         self.tokenizer = None
         self.device = "cpu"
         self._lock = threading.Lock()
+        self._load_lock = threading.Lock()
 
     def load_model(self) -> None:
         """Carrega o modelo MarianMT e Tokenizer em memória (Lazy loading)."""
         if self.model is not None and self.tokenizer is not None:
             return
 
-        logger.info(f"Iniciando carregamento do modelo de tradução: {self.model_name}")
-        
-        # Cria diretório de cache se não existir
-        os.makedirs(self.cache_dir, exist_ok=True)
-        
-        try:
-            # Detectar dispositivo ideal: CUDA -> MPS (Apple Silicon) -> CPU
-            if torch.cuda.is_available():
-                self.device = "cuda"
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                # Nota: Em alguns ambientes mais antigos, mps pode ter bugs com MarianMT. 
-                # Mas é o padrão recomendado para aceleração em Apple Silicon.
-                self.device = "mps"
-            else:
-                self.device = "cpu"
+        with self._load_lock:
+            # Double-checked locking
+            if self.model is not None and self.tokenizer is not None:
+                return
+
+            logger.info(f"Iniciando carregamento do modelo de tradução: {self.model_name}")
+            
+            # Cria diretório de cache se não existir
+            os.makedirs(self.cache_dir, exist_ok=True)
+            
+            try:
+                # Detectar dispositivo ideal: CUDA -> MPS (Apple Silicon) -> CPU
+                if torch.cuda.is_available():
+                    self.device = "cuda"
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    # Nota: Em alguns ambientes mais antigos, mps pode ter bugs com MarianMT. 
+                    # Mas é o padrão recomendado para aceleração em Apple Silicon.
+                    self.device = "mps"
+                else:
+                    self.device = "cpu"
+                    
+                logger.info(f"Dispositivo selecionado para tradução local: {self.device}")
                 
-            logger.info(f"Dispositivo selecionado para tradução local: {self.device}")
-            
-            # Carrega tokenizer e modelo
-            self.tokenizer = MarianTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir
-            )
-            self.model = MarianMTModel.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir
-            ).to(self.device)
-            
-            logger.info("Modelo de tradução local carregado com sucesso.")
-        except Exception as e:
-            logger.error(f"Falha crítica ao carregar o modelo MarianMT: {str(e)}", exc_info=True)
-            raise RuntimeError(f"Não foi possível carregar o modelo de tradução local: {str(e)}")
+                # Carrega tokenizer e modelo
+                self.tokenizer = MarianTokenizer.from_pretrained(
+                    self.model_name,
+                    cache_dir=self.cache_dir
+                )
+                self.model = MarianMTModel.from_pretrained(
+                    self.model_name,
+                    cache_dir=self.cache_dir
+                ).to(self.device)
+                
+                logger.info("Modelo de tradução local carregado com sucesso.")
+            except Exception as e:
+                logger.error(f"Falha crítica ao carregar o modelo MarianMT: {str(e)}", exc_info=True)
+                raise RuntimeError(f"Não foi possível carregar o modelo de tradução local: {str(e)}")
 
     def translate(self, texts: List[str]) -> List[str]:
         """
