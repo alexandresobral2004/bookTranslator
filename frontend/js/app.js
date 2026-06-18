@@ -184,11 +184,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -------------------------------------------------------------
-    // SSE Stream Progress Listener
+    // SSE Stream Progress Listener — com reconexão automática
     // -------------------------------------------------------------
+
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const BASE_RECONNECT_DELAY_MS = 1000; // 1s inicial, dobra a cada tentativa (máx 30s)
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+
     function startSSEProgress(jobId) {
+        reconnectAttempts = 0;
+        connectSSE(jobId);
+    }
+
+    function connectSSE(jobId) {
+        // Fecha conexão anterior, se existir
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+
         const url = `/api/status/${jobId}/events`;
         eventSource = new EventSource(url);
+
+        eventSource.onopen = () => {
+            // Conexão estabelecida: restaura cor e limpa indicador de reconexão
+            reconnectAttempts = 0;
+            statusMessage.style.color = '';
+        };
 
         eventSource.onmessage = (event) => {
             try {
@@ -199,12 +222,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        eventSource.addEventListener('error', (event) => {
-            console.error('Erro no stream SSE:', event);
-            statusMessage.textContent = 'Erro ao sincronizar progresso com o servidor.';
-            statusMessage.style.color = 'var(--error)';
-            eventSource.close();
+        eventSource.addEventListener('error', () => {
+            // EventSource em estado CLOSED significa que o servidor encerrou ou houve erro
+            if (eventSource.readyState === EventSource.CLOSED) {
+                attemptReconnect(jobId);
+            }
+            // readyState === CONNECTING: o browser já está tentando por conta própria — aguarda
         });
+    }
+
+    async function attemptReconnect(jobId) {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            statusMessage.textContent = 'Não foi possível reconectar ao servidor. Verifique sua conexão e recarregue a página.';
+            statusMessage.style.color = 'var(--error)';
+            if (eventSource) eventSource.close();
+            return;
+        }
+
+        reconnectAttempts++;
+        const delay = Math.min(BASE_RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts - 1), 30000);
+
+        statusMessage.textContent = `🔄 Reconectando... (tentativa ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
+        statusMessage.style.color = 'var(--warning, #f59e0b)';
+
+        // Antes de reconectar, busca o estado atual do job para não perder progresso
+        try {
+            const res = await fetch(`/api/status/${jobId}`);
+            if (res.ok) {
+                const job = await res.json();
+                updateProgressUI(job);
+                // Se o job já finalizou durante a queda, não reabre SSE
+                if (job.status === 'completed' || job.status === 'failed') return;
+            }
+        } catch (_) {
+            // silencia — tentará mesmo assim
+        }
+
+        reconnectTimer = setTimeout(() => connectSSE(jobId), delay);
     }
 
     // -------------------------------------------------------------
@@ -267,7 +323,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Lida com a finalização do job
         if (status === 'completed') {
-            eventSource.close();
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            if (eventSource) eventSource.close();
             setTimeout(() => {
                 progressPanel.style.display = 'none';
                 successPanel.style.display = 'block';
@@ -276,7 +333,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Lida com falhas
         if (status === 'failed') {
-            eventSource.close();
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            if (eventSource) eventSource.close();
             statusMessage.textContent = `Erro: ${job.error_message || 'Falha no processamento.'}`;
             statusMessage.style.color = 'var(--error)';
             statusPercentage.style.color = 'var(--error)';
